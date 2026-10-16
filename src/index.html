@@ -598,7 +598,8 @@ function composeGroupActions(containers, busy=false){
     + '<button data-group-action="pause" '+(!running || busy ? 'disabled' : '')+'>暂停</button>'
     + '<button data-group-action="resume" '+(!paused || busy ? 'disabled' : '')+'>恢复</button>'
     + '<button data-group-action="restart" '+(busy ? 'disabled' : '')+'>重启</button>'
-    + '<button data-group-logs '+(busy ? 'disabled' : '')+'>日志</button>';
+    + '<button data-group-logs '+(busy ? 'disabled' : '')+'>日志</button>'
+    + '<button data-group-delete class="danger" '+(busy || !containers.length ? 'disabled' : '')+'>删除</button>';
 }
 
 function composeGroupSummary(containers){
@@ -768,6 +769,32 @@ async function runComposeGroupAction(group, action){
   }
 }
 
+function confirmDeleteComposeGroup(group){
+  const project = group.dataset.composeProject;
+  const containers = state.data.containers.filter(c => {
+    const compose = composeInfo(c);
+    return compose.isCompose && compose.project === project;
+  });
+  if(!containers.length){ toast('项目中没有可删除的容器', true); return; }
+
+  openDel('删除 Compose 项目容器', project, '项目名称', async () => {
+    const results = await Promise.allSettled(containers.map(c =>
+      api('/containers/' + encodeURIComponent(c.Id) + '?force=true', 'DELETE')
+    ));
+    const failed = results.filter(result => result.status === 'rejected');
+    if(failed.length){
+      const completed = results.length - failed.length;
+      const reason = failed[0].reason?.message || '删除失败';
+      return {
+        toast: '已删除 ' + completed + ' 个容器，' + failed.length + ' 个失败：' + reason.slice(0,45),
+        error: true,
+      };
+    }
+    return {toast: 'Compose 项目的 ' + results.length + ' 个容器已删除'};
+  });
+  $('del-hint').textContent = '将强制删除该项目的 ' + containers.length + ' 个容器（运行中的容器会停止）。镜像、网络和数据卷会保留。';
+}
+
 function renderImages(){
   const all = state.data.images, v = $('view'), query = state.search.trim().toLocaleLowerCase();
   const list = all.filter(img => !query || [img.RepoTags?.join(' '),img.Id].join(' ').toLocaleLowerCase().includes(query));
@@ -904,6 +931,7 @@ $('view').addEventListener('click', async e => {
   const btn = e.target.closest('button[data-act]');
   const groupBtn = e.target.closest('button[data-group-action]');
   const groupLogsBtn = e.target.closest('button[data-group-logs]');
+  const groupDeleteBtn = e.target.closest('button[data-group-delete]');
   const toggle = e.target.closest('button[data-compose-toggle]');
   if(toggle && state.tab === 'containers'){
     const group = toggle.closest('.container-group');
@@ -921,6 +949,11 @@ $('view').addEventListener('click', async e => {
   if(groupLogsBtn && !groupLogsBtn.disabled && state.tab === 'containers'){
     const group = groupLogsBtn.closest('.container-group[data-compose-project]');
     if(group) showComposeLogs(group.dataset.composeProject);
+    return;
+  }
+  if(groupDeleteBtn && !groupDeleteBtn.disabled && state.tab === 'containers'){
+    const group = groupDeleteBtn.closest('.container-group[data-compose-project]');
+    if(group) confirmDeleteComposeGroup(group);
     return;
   }
   if(groupBtn && !groupBtn.disabled && state.tab === 'containers'){
@@ -1009,19 +1042,7 @@ async function primaryAction(){
 }
 
 // ---------- 日志 ----------
-function decodeDockerLogBuffer(buffer){
-  const input = new Uint8Array(buffer);
-  const frames = [];
-  let offset = 0, multiplexed = input.length >= 8;
-  while(multiplexed && offset < input.length){
-    if(offset + 8 > input.length || ![1,2,3].includes(input[offset])
-      || input[offset+1] || input[offset+2] || input[offset+3]){ multiplexed = false; break; }
-    const length = new DataView(input.buffer,input.byteOffset + offset + 4,4).getUint32(0,false);
-    if(length > input.length - offset - 8){ multiplexed = false; break; }
-    frames.push(input.subarray(offset + 8, offset + 8 + length));
-    offset += 8 + length;
-  }
-  const bytes = multiplexed ? concatLogFrames(frames) : input;
+function decodeLogBytes(bytes){
   try{ return new TextDecoder('utf-8',{fatal:true}).decode(bytes); }
   catch(_){
     try{ return new TextDecoder('gbk').decode(bytes); }
@@ -1043,13 +1064,124 @@ function cleanLogText(text){
     .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '');
 }
 
-async function fetchContainerLogs(id,tail=300){
-  const res = await fetch('/api/containers/' + encodeURIComponent(id) + '/logs?stdout=1&stderr=1&timestamps=1&tail=' + tail);
-  if(!res.ok){
-    const message = await res.text();
-    throw new Error(message || res.statusText || '读取日志失败');
+function createDockerLogFrameDecoder(onFrame){
+  let pending = new Uint8Array(0), multiplexed = null;
+  return function push(chunk,flush=false){
+    if(chunk.length) pending = concatLogFrames([pending,chunk]);
+    if(multiplexed === null){
+      if(pending.length < 8 && !flush) return;
+      multiplexed = pending.length >= 8 && [1,2,3].includes(pending[0])
+        && pending[1] === 0 && pending[2] === 0 && pending[3] === 0;
+    }
+    if(!multiplexed){
+      if(pending.length) onFrame(pending);
+      pending = new Uint8Array(0);
+      return;
+    }
+    while(pending.length >= 8){
+      if(![1,2,3].includes(pending[0]) || pending[1] || pending[2] || pending[3]){
+        multiplexed = false;
+        if(pending.length) onFrame(pending);
+        pending = new Uint8Array(0);
+        return;
+      }
+      const length = new DataView(pending.buffer,pending.byteOffset + 4,4).getUint32(0,false);
+      if(length > 64 * 1024 * 1024){
+        multiplexed = false;
+        onFrame(pending);
+        pending = new Uint8Array(0);
+        return;
+      }
+      if(pending.length < length + 8) break;
+      onFrame(pending.subarray(8,length + 8));
+      pending = pending.slice(length + 8);
+    }
+    if(flush && pending.length){ onFrame(pending); pending = new Uint8Array(0); }
+  };
+}
+
+function createLogTextDecoder(onText,prefix=''){
+  let pending = new Uint8Array(0);
+  return function push(bytes,flush=false){
+    if(bytes.length) pending = concatLogFrames([pending,bytes]);
+    let start = 0;
+    for(let i=0;i<pending.length;i++){
+      if(pending[i] !== 10) continue;
+      onText(prefix + cleanLogText(decodeLogBytes(pending.subarray(start,i + 1))));
+      start = i + 1;
+    }
+    if(start) pending = pending.slice(start);
+    if(pending.length > 1024 * 1024){
+      onText(prefix + cleanLogText(decodeLogBytes(pending)));
+      pending = new Uint8Array(0);
+    }else if(flush && pending.length){
+      onText(prefix + cleanLogText(decodeLogBytes(pending)));
+      pending = new Uint8Array(0);
+    }
+  };
+}
+
+let activeLogControllers = [];
+let logSession = 0;
+let logHasOutput = false;
+const MAX_LOG_CHARS = 500000;
+
+function stopLogStreams(){
+  logSession++;
+  activeLogControllers.forEach(controller => controller.abort());
+  activeLogControllers = [];
+  return logSession;
+}
+
+function beginLogSession(title,sub){
+  const session = stopLogStreams();
+  logHasOutput = false;
+  presentLogs(title,sub,'连接中…');
+  return session;
+}
+
+function appendLiveLog(session,text){
+  if(session !== logSession || !$('log-modal').classList.contains('show') || !text) return;
+  const pre = $('log-content');
+  const keepFollowing = pre.scrollHeight - pre.scrollTop - pre.clientHeight < 48;
+  if(!logHasOutput){ pre.textContent = ''; logHasOutput = true; }
+  pre.textContent += text;
+  if(pre.textContent.length > MAX_LOG_CHARS){
+    pre.textContent = '…较早日志已省略…\n' + pre.textContent.slice(-MAX_LOG_CHARS);
   }
-  return decodeDockerLogBuffer(await res.arrayBuffer());
+  if(keepFollowing) pre.scrollTop = pre.scrollHeight;
+}
+
+async function followContainerLogs(id,session,{tail=300,prefix=''}={}){
+  const controller = new AbortController();
+  activeLogControllers.push(controller);
+  try{
+    const url = '/api/containers/' + encodeURIComponent(id) + '/logs?stdout=1&stderr=1&timestamps=1&tail=' + tail + '&follow=1';
+    const res = await fetch(url,{signal:controller.signal});
+    if(!res.ok){
+      const message = await res.text();
+      throw new Error(message || res.statusText || '读取日志失败');
+    }
+    if(!res.body) throw new Error('浏览器不支持日志流');
+    if(session === logSession && !logHasOutput) $('log-content').textContent = '等待日志输出…';
+    const decodeText = createLogTextDecoder(text => appendLiveLog(session,text),prefix);
+    const decodeFrames = createDockerLogFrameDecoder(bytes => decodeText(bytes));
+    const reader = res.body.getReader();
+    while(true){
+      const {done,value} = await reader.read();
+      if(done) break;
+      decodeFrames(value);
+    }
+    decodeFrames(new Uint8Array(0),true);
+    decodeText(new Uint8Array(0),true);
+  }catch(error){
+    if(error.name !== 'AbortError' && session === logSession){
+      appendLiveLog(session,'\n日志连接中断：' + error.message + '\n');
+    }
+  }finally{
+    activeLogControllers = activeLogControllers.filter(item => item !== controller);
+    if(session === logSession && activeLogControllers.length === 0){ $('log-sub').textContent = '日志流已结束'; }
+  }
 }
 
 function presentLogs(title,sub,text){
@@ -1062,27 +1194,22 @@ function presentLogs(title,sub,text){
 }
 
 async function showLogs(id, name){
-  presentLogs(name,'加载中…','');
-  try{
-    presentLogs(name,'',cleanLogText(await fetchContainerLogs(id)));
-  }catch(err){ presentLogs(name,'','加载失败: ' + err.message); }
+  const session = beginLogSession(name,'实时跟随中 · 关闭窗口停止');
+  followContainerLogs(id,session);
 }
 
 async function showComposeLogs(project){
+  const session = beginLogSession('Compose 项目日志','');
   const containers = state.data.containers.filter(c => composeInfo(c).isCompose && composeInfo(c).project === project);
-  presentLogs('Compose 项目日志',project+' · '+containers.length+' 个容器','加载中…');
-  const results = await Promise.all(containers.map(async c => {
+  $('log-sub').textContent = project+' · '+containers.length+' 个服务 · 实时跟随中 · 关闭窗口停止';
+  if(!containers.length){ $('log-content').textContent = '没有找到该 Compose 项目的容器'; return; }
+  containers.forEach(c => {
     const name = (c.Names && c.Names[0] ? c.Names[0] : c.Id.slice(0,12)).replace(/^\//,'');
     const service = composeInfo(c).service;
-    try{ return {name,service,text:await fetchContainerLogs(c.Id,100)}; }
-    catch(error){ return {name,service,error:error.message}; }
-  }));
-  const text = results.map(result =>
-    '['+result.service+' · '+result.name+']\n'+(result.error ? '加载失败: '+result.error : cleanLogText(result.text || '（没有日志输出）'))
-  ).join('\n\n');
-  presentLogs('Compose 项目日志',project+' · '+containers.length+' 个容器',text);
+    followContainerLogs(c.Id,session,{tail:100,prefix:'['+service+' · '+name+'] '});
+  });
 }
-function closeLog(){ $('log-modal').classList.remove('show'); }
+function closeLog(){ stopLogStreams(); $('log-modal').classList.remove('show'); }
 
 // ---------- 输入 ----------
 function openInput(title, label, def, cb){
@@ -1132,8 +1259,9 @@ async function confirmDel(){
   const btn = $('del-confirm');
   btn.disabled = true;
   try{
-    await cb();
-    toast('已删除');
+    const result = await cb();
+    toast(result && typeof result === 'object' && result.toast ? result.toast : '已删除',
+      Boolean(result && typeof result === 'object' && result.error));
     closeDel();
     await load();
   }catch(err){

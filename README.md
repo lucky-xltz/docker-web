@@ -2,7 +2,7 @@
 
 极简 Docker 管理面板，支持容器、Compose 项目、镜像和数据卷管理，可打包为单个 Docker 容器运行。
 
-Docker Hub 镜像：[`xiansen11/docker-web:2.1.0`](https://hub.docker.com/r/xiansen11/docker-web)，支持 `linux/amd64` 和 `linux/arm64`。
+Docker Hub 镜像：[`xiansen11/docker-web:2.1.1`](https://hub.docker.com/r/xiansen11/docker-web)，支持 `linux/amd64` 和 `linux/arm64`。
 
 - 前端：单个 `index.html`，零依赖、零构建
 - 后端：`Bun.serve` 静态托管 + 反向代理到 `docker.sock`
@@ -23,7 +23,7 @@ docker run -d --name docker-panel -p 9999:9999 \
 # 使用 Docker Hub 发布的镜像
 docker run -d --name docker-panel --restart unless-stopped \
   -p 9999:9999 -v /var/run/docker.sock:/var/run/docker.sock \
-  xiansen11/docker-web:2.1.0
+  xiansen11/docker-web:2.1.1
 ```
 
 打开 http://localhost:9999
@@ -52,7 +52,7 @@ docker run -d --name docker-panel --restart unless-stopped \
 
 当前镜像基于 Linux。Windows 请使用 Docker Desktop 的 Linux 容器模式和 WSL 2 后端，并在启用 Docker Desktop 集成的 WSL 发行版中运行 Compose。端口映射仍是 `9999:9999`；`/var/run/docker.sock` 是 Linux Docker socket，不能直接替换成 Windows named pipe。Docker Desktop 的 Windows + WSL 2 环境提供 Unix socket，供 Linux 容器访问 Docker Engine。
 
-前端交互包括主题切换、搜索容器 / 镜像 / 数据卷、输入名称确认删除和日志查看。Compose 项目支持分组管理和项目日志，容器页后台静默同步状态，默认每 5 秒一次；同步间隔可在设置页更改或关闭，并保存在当前浏览器。右上角按钮打开设置；镜像和数据卷在打开页面、切换分类或执行操作后更新。
+前端交互包括主题切换、搜索容器 / 镜像 / 数据卷、输入名称确认删除和实时日志查看。Compose 项目支持分组启动、暂停、恢复、重启、日志和批量删除；容器页后台静默同步状态，默认每 5 秒一次；同步间隔可在设置页更改或关闭，并保存在当前浏览器。右上角按钮打开设置；镜像和数据卷在打开页面、切换分类或执行操作后更新。
 
 ## 界面截图
 

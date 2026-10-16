@@ -59,6 +59,38 @@ function decodeChunked(buf: Uint8Array): Uint8Array {
   return new Uint8Array(out);
 }
 
+/** 增量解析 HTTP chunked 响应，供 Docker follow 日志接口使用。 */
+function createChunkedDecoder(onChunk: (chunk: Uint8Array) => void, onEnd: () => void) {
+  let buffer = new Uint8Array(0);
+  let remaining: number | null = null;
+  let ended = false;
+  return (incoming: Uint8Array) => {
+    if (ended) return;
+    buffer = concat([buffer, incoming]);
+    while (true) {
+      if (remaining === null) {
+        const lineEnd = buffer.indexOf(0x0d);
+        if (lineEnd < 0 || lineEnd + 1 >= buffer.length) return;
+        if (buffer[lineEnd + 1] !== 0x0a) throw new Error("Invalid chunked response");
+        const sizeText = new TextDecoder().decode(buffer.subarray(0, lineEnd)).split(";")[0].trim();
+        const size = Number.parseInt(sizeText, 16);
+        if (!Number.isFinite(size) || size < 0) throw new Error("Invalid chunk size");
+        buffer = buffer.subarray(lineEnd + 2);
+        if (size === 0) {
+          ended = true;
+          onEnd();
+          return;
+        }
+        remaining = size;
+      }
+      if (buffer.length < remaining + 2) return;
+      onChunk(buffer.subarray(0, remaining));
+      buffer = buffer.subarray(remaining + 2);
+      remaining = null;
+    }
+  };
+}
+
 /** 解析 Docker 响应的状态行 + 响应头 */
 function parseHead(raw: string) {
   const end = raw.indexOf("\r\n\r\n");
@@ -130,9 +162,13 @@ Bun.serve({
     if (len > MAX_BODY) return errText("请求体过大", 413);
     if (req.body) body = new Uint8Array(await req.arrayBuffer());
 
+    const followLogs = req.method === "GET" &&
+      /^\/containers\/[^/]+\/logs$/.test(dockerPath.split("?")[0]) &&
+      url.searchParams.get("follow") === "1";
+
     // ---- 连接 docker.sock 并收发数据 ----
-    // 注意：Bun.connect 一旦注册 data 回调，sock.readable 即为 undefined，
-    // 必须用回调累积响应，不能在返回后从流里读。
+    // Bun.connect 注册 data 回调后不能再读取 sock.readable；普通请求在回调里累积，
+    // follow 日志请求则在回调里解析 HTTP 头并直接推送响应流。
     let chunks: Uint8Array[] = [];
     let total = 0;
     let settled: () => void;
@@ -140,12 +176,93 @@ Bun.serve({
       settled = r;
     });
 
-    let sock: Awaited<ReturnType<typeof Bun.connect>>;
+    let sock: Awaited<ReturnType<typeof Bun.connect>> | undefined;
+    let streamController: ReadableStreamDefaultController<Uint8Array> | null = null;
+    let streamCancelled = false;
+    let streamEnded = false;
+    let streamHeadersResolved = false;
+    let streamHeadChunks: Uint8Array[] = [];
+    let streamBodyPending: Uint8Array[] = [];
+    let streamChunked = false;
+    let decodeStreamBody: ((chunk: Uint8Array) => void) | null = null;
+    let resolveStreamHeaders!: (value: { status: number; headers: Map<string, string> }) => void;
+    let rejectStreamHeaders!: (error: Error) => void;
+    const streamHeadersReady = new Promise<{ status: number; headers: Map<string, string> }>((resolve, reject) => {
+      resolveStreamHeaders = resolve;
+      rejectStreamHeaders = reject;
+    });
+    const responseStream = followLogs ? new ReadableStream<Uint8Array>({
+      start(controller) {
+        streamController = controller;
+        for (const chunk of streamBodyPending) controller.enqueue(chunk);
+        streamBodyPending = [];
+      },
+      cancel() {
+        streamCancelled = true;
+        sock?.end();
+      },
+    }) : null;
+
+    const enqueueStreamBytes = (chunk: Uint8Array) => {
+      if (!chunk.length || streamCancelled || streamEnded) return;
+      if (streamController) streamController.enqueue(chunk.slice());
+      else streamBodyPending.push(chunk.slice());
+    };
+
+    const handleFollowData = (chunk: Uint8Array) => {
+      if (!streamHeadersResolved) {
+        streamHeadChunks.push(chunk);
+        const rawHead = concat(streamHeadChunks);
+        const headEnd = findHeadEnd(rawHead);
+        if (headEnd < 0) {
+          if (rawHead.length > 64 * 1024) rejectStreamHeaders(new Error("Docker response headers are too large"));
+          return;
+        }
+        const { status, headers } = parseHead(new TextDecoder("latin1").decode(rawHead.subarray(0, headEnd)));
+        streamHeadersResolved = true;
+        streamChunked = (headers.get("transfer-encoding") ?? "").toLowerCase().includes("chunked");
+        if (streamChunked) {
+          try {
+            decodeStreamBody = createChunkedDecoder(enqueueStreamBytes, () => {
+              if (streamController && !streamEnded && !streamCancelled) streamController.close();
+              streamEnded = true;
+              sock?.end();
+            });
+          } catch (error) {
+            rejectStreamHeaders(error instanceof Error ? error : new Error(String(error)));
+            return;
+          }
+        }
+        resolveStreamHeaders({ status, headers });
+        const firstBodyChunk = rawHead.subarray(headEnd + 4);
+        streamHeadChunks = [];
+        if (firstBodyChunk.length) {
+          if (streamChunked) decodeStreamBody?.(firstBodyChunk);
+          else enqueueStreamBytes(firstBodyChunk);
+        }
+        return;
+      }
+      if (streamChunked) decodeStreamBody?.(chunk);
+      else enqueueStreamBytes(chunk);
+    };
+
     try {
       sock = await Bun.connect({
         unix: DOCKER_SOCKET,
         socket: {
           data(_s, chunk) {
+            if (followLogs) {
+              try {
+                handleFollowData(chunk);
+              } catch (error) {
+                const streamError = error instanceof Error ? error : new Error(String(error));
+                if (!streamHeadersResolved) rejectStreamHeaders(streamError);
+                else if (streamController && !streamEnded) streamController.error(streamError);
+                streamEnded = true;
+                _s.end();
+              }
+              return;
+            }
             total += chunk.length;
             if (total > MAX_BODY) {
               chunks = [];
@@ -156,8 +273,18 @@ Bun.serve({
           },
           error(_s, e) {
             console.error("[docker]", e);
+            if (followLogs) {
+              if (!streamHeadersResolved) rejectStreamHeaders(e);
+              else if (streamController && !streamEnded) streamController.error(e);
+              streamEnded = true;
+            }
           },
           close() {
+            if (followLogs) {
+              if (!streamHeadersResolved) rejectStreamHeaders(new Error("Docker closed the log stream before sending headers"));
+              else if (streamController && !streamEnded && !streamCancelled) streamController.close();
+              streamEnded = true;
+            }
             settled();
           },
         },
@@ -180,6 +307,22 @@ Bun.serve({
       `\r\n`;
     sock.write(encoder.encode(head));
     if (body?.length) sock.write(body);
+
+    if (followLogs) {
+      req.signal.addEventListener("abort", () => sock?.end(), { once: true });
+      try {
+        const { status, headers } = await streamHeadersReady;
+        const outHeaders = new Headers({
+          "content-type": headers.get("content-type") ?? "application/vnd.docker.raw-stream",
+          "cache-control": "no-cache, no-transform",
+          "x-accel-buffering": "no",
+        });
+        return new Response(responseStream, { status, headers: outHeaders });
+      } catch (error) {
+        sock.end();
+        return errText(`读取 Docker 日志失败: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    }
 
     // ---- 等待完整响应（HTTP/1.1 + Connection: close，EOF 即完整）----
     const timer = setTimeout(() => settled(), 120_000);
