@@ -41,7 +41,21 @@ docker run -d --name docker-panel -p 9999:9999 \
 - 数据卷挂载 `/var/run/docker.sock` 后，容器内可管理**宿主机**的 Docker；若要管理 Docker-in-Docker，需另挂 `docker` 套接字或配合 `docker:dind` sidecar。
 - 面板默认只监听 `127.0.0.1`。容器内该地址仅在容器自身回环可用，需在 `docker run` 时用 `-p 9999:9999` 发布端口才能从外部访问。
 
+### Windows
+
+当前镜像基于 Linux。Windows 请使用 Docker Desktop 的 Linux 容器模式和 WSL 2 后端，并在启用 Docker Desktop 集成的 WSL 发行版中运行 Compose。端口映射仍是 `9999:9999`；`/var/run/docker.sock` 是 Linux Docker socket，不能直接替换成 Windows named pipe。Docker Desktop 的 Windows + WSL 2 环境提供 Unix socket，供 Linux 容器访问 Docker Engine。
+
 前端交互包括主题切换、搜索容器 / 镜像 / 数据卷、输入名称确认删除和日志查看。Compose 项目支持分组管理和项目日志，容器页后台静默同步状态，默认每 5 秒一次；同步间隔可在设置页更改或关闭，并保存在当前浏览器。右上角按钮打开设置；镜像和数据卷在打开页面、切换分类或执行操作后更新。
+
+## 界面截图
+
+以下截图使用虚构的演示容器数据，不包含本机容器信息。
+
+![容器总览](docs/screenshots/containers.png)
+
+![Compose 项目展开](docs/screenshots/compose-project.png)
+
+![设置页面](docs/screenshots/settings.png)
 
 ## 文件结构
 
