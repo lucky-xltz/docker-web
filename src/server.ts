@@ -1,11 +1,11 @@
 /**
- * Docker 管理面板 — Bun 版
+ * Docker 管理面板服务端
  *
  * 单进程同时做两件事：
  *   1. 作为静态服务器托管 index.html
  *   2. 把 /api/* 反向代理到本机 docker.sock（Unix socket 手写 HTTP）
  *
- * HTTP API 与原 Python 版完全一致，前端 index.html 无需改动：
+ * API 路由将请求转发至 Docker Engine：
  *   GET    /                        -> index.html
  *   GET    /api/containers/json     -> Docker: GET  /containers/json
  *   POST   /api/containers/x/start  -> Docker: POST /containers/x/start
@@ -13,7 +13,7 @@
  *   ...
  */
 
-// docker.sock 查找顺序与 Python 版一致：/var/run/docker.sock 优先，其次 ~/.docker/run/docker.sock
+// 优先查找系统级 socket，其次查找当前用户的 Docker Desktop socket。
 function findSocket(): string | null {
   const candidates = [
     "/var/run/docker.sock",

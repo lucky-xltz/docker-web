@@ -1,7 +1,6 @@
 src/
 !src/index.html
 !src/server.ts
-docker-panel.py
 node_modules
 *.log
 .git
