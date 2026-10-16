@@ -1,0 +1,12 @@
+src/
+!src/index.html
+!src/server.ts
+docker-panel.py
+node_modules
+*.log
+.git
+.gitignore
+Dockerfile
+.dockerignore
+docker-compose.yml
+README.md

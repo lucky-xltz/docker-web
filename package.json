@@ -1,0 +1,15 @@
+{
+  "name": "docker-web",
+  "version": "2.1.0",
+  "private": true,
+  "description": "极简 Docker 管理面板 — HTML + Bun",
+  "type": "module",
+  "scripts": {
+    "start": "bun run src/server.ts",
+    "dev": "bun --watch run src/server.ts",
+    "docker:build": "docker build -t docker-panel .",
+    "docker:run": "docker run -d --name docker-panel -p 9999:9999 -v /var/run/docker.sock:/var/run/docker.sock docker-panel",
+    "compose:up": "docker compose up -d --build",
+    "compose:down": "docker compose down"
+  }
+}

@@ -1,0 +1,13 @@
+services:
+  docker-panel:
+    build: .
+    image: docker-panel:latest
+    container_name: docker-panel
+    ports:
+      - "9999:9999"
+    volumes:
+      # 挂载宿主机 docker.sock，面板即可管理宿主机的 Docker
+      - /var/run/docker.sock:/var/run/docker.sock
+    # 默认非 root 运行；若宿主机 docker.sock 属组不是 root(0)，改为对应 gid
+    user: "0:0"
+    restart: unless-stopped

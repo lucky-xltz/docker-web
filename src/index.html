@@ -1,0 +1,1175 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Docker</title>
+<style>
+:root{
+  --bg:#0a0a0b; --card:#141417; --card-hover:#1a1a1f; --border:#232329; --border-hover:#2e2e36;
+  --text:#e4e4e7; --text-dim:#a1a1aa; --muted:#71717a;
+  --green:#22c55e; --green-glow:rgba(34,197,94,.15);
+  --red:#f87171; --red-bg:#2a1516; --red-border:#5a2020;
+  --blue:#60a5fa; --blue-bg:#1e3a5f; --blue-border:#2a4a73;
+  --btn:#1c1c20; --btn-hover:#26262b;
+  --input-bg:#0a0a0b;
+  --scroll-thumb:#2e2e36; --scroll-thumb-hover:#3f3f46;
+  --code-bg:#0a0a0b;
+}
+[data-theme="light"]{
+  --bg:#f6f6f7; --card:#ffffff; --card-hover:#fafafa; --border:#e4e4e7; --border-hover:#d4d4d8;
+  --text:#18181b; --text-dim:#52525b; --muted:#71717a;
+  --green:#16a34a; --green-glow:rgba(22,163,74,.15);
+  --red:#dc2626; --red-bg:#fef2f2; --red-border:#fecaca;
+  --blue:#2563eb; --blue-bg:#eff6ff; --blue-border:#bfdbfe;
+  --btn:#ffffff; --btn-hover:#f4f4f5;
+  --input-bg:#ffffff;
+  --scroll-thumb:#d4d4d8; --scroll-thumb-hover:#a1a1aa;
+  --code-bg:#f9f9fa;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100%}
+/* --fs: 全局字号缩放（1 = 默认），由设置页调节并存入 localStorage */
+html{font-size:calc(14px * var(--fs,1))}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC",sans-serif;
+  background:var(--bg);color:var(--text);-webkit-font-smoothing:antialiased;
+  transition:background .2s,color .2s}
+html.theme-switching *,html.theme-switching *::before,html.theme-switching *::after{transition:none!important}
+
+/* 美化滚动条 */
+::-webkit-scrollbar{width:10px;height:10px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--scroll-thumb);border-radius:10px;
+  border:2px solid transparent;background-clip:padding-box;transition:background .15s}
+::-webkit-scrollbar-thumb:hover{background:var(--scroll-thumb-hover);background-clip:padding-box;
+  border:2px solid transparent}
+::-webkit-scrollbar-corner{background:transparent}
+
+/* 与下方 main 共用同一宽度并对齐，避免宽屏时 header 贴左、内容居中 */
+header{display:flex;align-items:center;justify-content:space-between;padding:14px 28px;
+  max-width:1240px;margin:0 auto;width:100%;
+  border-bottom:1px solid var(--border);position:sticky;top:0;
+  background:var(--bg);z-index:10;gap:20px;flex-wrap:wrap}
+.tabs{display:flex;gap:3px;background:var(--btn);padding:3px;border-radius:9px;border:1px solid var(--border)}
+.tabs button{background:transparent;border:none;padding:6px 16px;border-radius:6px;
+  color:var(--muted);font-size:.929em;font-weight:500;cursor:pointer;transition:.15s}
+.tabs button.active{background:var(--card);color:var(--text);box-shadow:0 1px 3px rgba(0,0,0,.1)}
+.tabs button:hover:not(.active){color:var(--text)}
+.right{display:flex;align-items:center;gap:10px}
+.count{color:var(--muted);font-size:.929em}
+.search-wrap{display:flex;align-items:center;gap:8px;flex:1;max-width:360px;min-width:180px;
+  height:36px;padding:0 10px;border:1px solid var(--border);border-radius:9px;
+  background:var(--input-bg);color:var(--muted);transition:.15s}
+.search-wrap:focus-within{border-color:var(--blue);box-shadow:0 0 0 3px color-mix(in srgb,var(--blue) 18%,transparent)}
+.search-wrap[hidden]{display:none}
+.search-wrap input{flex:1;min-width:0;border:0;outline:0;background:transparent;color:var(--text);
+  font:inherit;font-size:.929em}
+.search-wrap input::placeholder{color:var(--muted)}
+.search-clear{display:none;width:22px;height:22px;padding:0;border:0;background:transparent;color:var(--muted);
+  font-size:1.2em;line-height:1}
+.search-clear.show{display:flex;align-items:center;justify-content:center}
+ button{font:inherit;font-size:.929em;color:var(--text);background:var(--btn);border:1px solid var(--border);
+  padding:7px 14px;border-radius:7px;cursor:pointer;transition:.15s}
+button:hover{background:var(--btn-hover);border-color:var(--border-hover)}
+button:active{transform:scale(.97)}
+button:disabled{opacity:.4;cursor:default;transform:none}
+button.primary{background:var(--blue-bg);border-color:var(--blue-border);color:var(--blue)}
+button.primary:hover{filter:brightness(1.1)}
+button.danger:hover{background:var(--red-bg);border-color:var(--red-border);color:var(--red)}
+.icon-btn{width:34px;height:34px;padding:0;display:flex;align-items:center;justify-content:center;
+  font-size:1.071em;border-radius:8px}
+
+main{padding:28px;max-width:1240px;margin:0 auto;display:flex;justify-content:center}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));
+  justify-content:center;gap:14px;width:100%}
+
+.card{background:var(--card);border:1px solid var(--border);border-radius:11px;
+  padding:16px;transition:.15s;animation:fade .25s ease-out}
+@keyframes fade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+.card:hover{border-color:var(--border-hover);background:var(--card-hover)}
+.card-head{display:flex;align-items:center;gap:9px;margin-bottom:14px}
+.container-group{grid-column:1/-1;display:grid;gap:14px}
+.compose-parent-card{margin:0}
+.container-group-head{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+.compose-title{font-size:.929em;font-weight:600}
+.compose-toggle{display:flex;align-items:center;gap:6px;flex:0 0 auto;padding:5px 10px;font-size:.82em}
+.compose-parent-actions button{font-size:.857em}
+.compose-chevron{display:inline-block;color:var(--muted);transition:transform .15s}
+.compose-toggle[aria-expanded="true"] .compose-chevron{transform:rotate(180deg)}
+.container-group-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:14px}
+.container-group-cards[hidden]{display:none}
+.dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;transition:.15s}
+.dot.on{background:var(--green);box-shadow:0 0 0 3px var(--green-glow)}
+.dot.off{background:var(--scroll-thumb-hover)}
+.name{font-weight:600;font-size:1em;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.status{font-size:.786em;color:var(--muted);font-family:ui-monospace,monospace;flex-shrink:0}
+.meta{display:flex;gap:10px;margin-bottom:7px;font-size:.857em;align-items:baseline}
+.meta .label{color:var(--muted);width:42px;flex-shrink:0}
+.meta .value{color:var(--text-dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.meta .value.port-list{display:flex;align-items:center;flex-wrap:wrap;gap:4px;white-space:normal;overflow:visible}
+.port-link{color:var(--blue);text-decoration:none;border-bottom:1px dotted color-mix(in srgb,var(--blue) 55%,transparent)}
+.port-link:hover{border-bottom-style:solid}
+.port-separator{color:var(--muted)}
+.mono{font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:.821em}
+.actions{display:flex;gap:7px;margin-top:14px;padding-top:14px;border-top:1px solid var(--border)}
+.actions button{flex:1;padding:6px 8px;font-size:.857em}
+.empty{text-align:center;padding:100px 20px;color:var(--muted);width:100%}
+.empty p{margin-top:8px;font-size:.929em}
+
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;align-items:center;
+  justify-content:center;padding:24px;z-index:100;backdrop-filter:blur(4px);animation:fade .15s}
+.modal.show{display:flex}
+.modal-box{background:var(--card);border:1px solid var(--border);border-radius:13px;
+  width:100%;max-width:900px;max-height:80vh;display:flex;flex-direction:column;overflow:hidden;
+  box-shadow:0 20px 60px rgba(0,0,0,.4)}
+.modal-box.small{max-width:440px}
+.modal-head{display:flex;align-items:center;justify-content:space-between;
+  padding:14px 18px;border-bottom:1px solid var(--border);flex-shrink:0}
+.modal-head h2{font-size:1em;font-weight:600}
+.modal-head .sub{color:var(--muted);font-size:.857em;margin-left:10px}
+.modal-body{padding:18px;display:flex;flex-direction:column;gap:14px;overflow-y:auto}
+.modal-body label{font-size:.857em;color:var(--muted);margin-bottom:6px;display:block}
+.modal-body input{width:100%;background:var(--input-bg);border:1px solid var(--border);border-radius:7px;
+  padding:9px 12px;color:var(--text);font:inherit;font-size:.929em;outline:none;transition:.15s}
+.modal-body input:focus{border-color:var(--blue);box-shadow:0 0 0 3px color-mix(in srgb,var(--blue) 20%,transparent)}
+.modal-body .hint{font-size:.857em;color:var(--muted);line-height:1.5}
+.modal-body .target-name{font-family:ui-monospace,monospace;font-size:.929em;color:var(--text);
+  background:var(--code-bg);padding:10px 12px;border-radius:7px;border:1px solid var(--border);
+  word-break:break-all;user-select:all}
+.modal-foot{display:flex;justify-content:flex-end;gap:8px;padding:14px 18px;
+  border-top:1px solid var(--border);flex-shrink:0}
+
+pre{flex:1;overflow:auto;padding:16px 18px;font-family:ui-monospace,"SF Mono",Menlo,monospace;
+  font-size:.857em;line-height:1.65;color:var(--text-dim);background:var(--code-bg);margin:0;
+  white-space:pre-wrap;word-break:break-all;border-radius:0}
+pre::-webkit-scrollbar{width:12px;height:12px}
+pre::-webkit-scrollbar-thumb{background:var(--scroll-thumb);border-radius:10px;
+  border:3px solid var(--code-bg);background-clip:padding-box}
+pre::-webkit-scrollbar-thumb:hover{background:var(--scroll-thumb-hover);background-clip:padding-box;
+  border:3px solid var(--code-bg)}
+
+.toast{position:fixed;top:max(24px,env(safe-area-inset-top));left:50%;transform:translateX(-50%) translateY(-80px);
+  background:var(--card);border:1px solid var(--border);padding:10px 18px;border-radius:9px;
+  font-size:.929em;transition:.25s;z-index:200;opacity:0;pointer-events:none;max-width:80vw;
+  box-shadow:0 10px 30px rgba(0,0,0,.25)}
+.toast.show{transform:translateX(-50%) translateY(0);opacity:1}
+.toast.err{border-color:var(--red-border);color:var(--red)}
+
+/* ---------- 设置页 ---------- */
+.settings{width:100%;max-width:680px;margin:0 auto;display:flex;flex-direction:column;gap:14px}
+.grid.settings-page{display:flex;align-items:center;justify-content:center;min-height:calc(100vh - 146px)}
+.settings-intro{margin:0 0 4px 2px}
+.settings-intro .eyebrow{font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:.75em;
+  letter-spacing:.12em;text-transform:uppercase;color:var(--blue)}
+.settings-intro h2{font-size:1.5em;letter-spacing:-.03em;margin-top:5px}
+.settings-intro p{font-size:.929em;color:var(--muted);margin-top:5px}
+.settings-card{background:var(--card);border:1px solid var(--border);border-radius:11px;padding:18px 20px}
+.settings-card h3{font-size:1em;font-weight:600;margin-bottom:4px}
+.settings-card .desc{font-size:.857em;color:var(--muted);margin-bottom:16px;line-height:1.6}
+.setting-row{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.setting-row .scale{font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:.857em;
+  color:var(--text-dim);min-width:44px;text-align:right}
+.fs-picker{display:flex;gap:8px;flex:1}
+.fs-btn{flex:1;padding:0;height:44px;border-radius:9px;background:var(--input-bg);
+  border:1px solid var(--border);color:var(--text-dim);cursor:pointer;
+  display:flex;align-items:center;justify-content:center;transition:.15s;line-height:1}
+.fs-btn:hover{border-color:var(--border-hover);color:var(--text)}
+.fs-btn.active{border-color:var(--blue-border);color:var(--blue);background:var(--blue-bg)}
+.fs-btn:active{transform:scale(.96)}
+.setting-select{min-width:150px;padding:9px 12px;border-radius:8px;border:1px solid var(--border);
+  color:var(--text);background:var(--input-bg);font:inherit;cursor:pointer}
+.setting-select:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+.setting-row label{font-size:.929em;color:var(--text-dim)}
+/* ---------- 数据卷：使用者 ---------- */
+.meta.users{align-items:flex-start}
+.meta .value.users-wrap{display:flex;flex-wrap:wrap;gap:6px;white-space:normal;overflow:visible}
+.user-tag{display:inline-flex;align-items:center;gap:6px;font-family:ui-monospace,"SF Mono",Menlo,monospace;
+  font-size:.857em;color:var(--green);background:var(--green-glow);
+  border:1px solid color-mix(in srgb,var(--green) 35%,transparent);
+  padding:3px 9px;border-radius:20px;max-width:100%;cursor:default}
+.user-tag.stopped{color:var(--muted);background:var(--btn);
+  border-color:var(--border);border-style:dashed}
+.user-dot{width:6px;height:6px;border-radius:50%;background:currentColor;flex-shrink:0}
+.user-dest{color:var(--muted);font-size:.92em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+@media(max-width:640px){
+  header{gap:10px;padding:12px 16px}
+  .tabs{order:0}
+  .right{order:1;margin-left:auto}
+  .search-wrap{order:2;max-width:none;flex-basis:100%}
+  .grid.settings-page{align-items:flex-start;min-height:auto}
+  .settings-intro{margin-bottom:6px}
+  .setting-select{width:100%}
+}
+.hint-inline{font-size:.857em;color:var(--muted);line-height:1.5}
+</style>
+</head>
+<body>
+<header>
+  <div class="tabs">
+    <button data-tab="containers" class="active">容器</button>
+    <button data-tab="images">镜像</button>
+    <button data-tab="volumes">数据卷</button>
+  </div>
+  <label class="search-wrap" id="search-wrap">
+    <span aria-hidden="true">⌕</span>
+    <input id="search-input" type="search" autocomplete="off" placeholder="搜索容器…" aria-label="搜索当前分类">
+    <button type="button" class="search-clear" id="search-clear" aria-label="清除搜索">×</button>
+  </label>
+  <div class="right">
+    <span class="count" id="count"></span>
+    <button id="action-btn" class="primary" onclick="primaryAction()" style="display:none"></button>
+    <button class="icon-btn" onclick="toggleTheme()" title="切换主题" id="theme-btn">☀</button>
+    <button onclick="openSettings()" title="打开设置">设置</button>
+  </div>
+</header>
+
+<main><div class="grid" id="view"></div></main>
+
+<div class="modal" id="log-modal">
+  <div class="modal-box">
+    <div class="modal-head">
+      <div><h2 id="log-title"></h2><span class="sub" id="log-sub"></span></div>
+      <button onclick="closeLog()">关闭</button>
+    </div>
+    <pre id="log-content"></pre>
+  </div>
+</div>
+
+<div class="modal" id="input-modal">
+  <div class="modal-box small">
+    <div class="modal-head"><h2 id="input-title"></h2></div>
+    <div class="modal-body">
+      <div><label id="input-label"></label>
+      <input id="input-field" autocomplete="off"></div>
+    </div>
+    <div class="modal-foot">
+      <button onclick="closeInput()">取消</button>
+      <button class="primary" onclick="confirmInput()">确定</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="del-modal">
+  <div class="modal-box small">
+    <div class="modal-head"><h2 id="del-title">删除确认</h2></div>
+    <div class="modal-body">
+      <div class="hint" id="del-hint"></div>
+      <div class="target-name" id="del-target"></div>
+      <div id="del-input-wrap">
+        <label id="del-label"></label>
+        <input id="del-input" autocomplete="off" placeholder="">
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button onclick="closeDel()">取消</button>
+      <button class="danger" id="del-confirm" onclick="confirmDel()" disabled>确认删除</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const $ = id => document.getElementById(id);
+const esc = s => String(s==null?'':s).replace(/[&<>"']/g, c =>
+  ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+const state = { tab:'containers', data:{containers:[],images:[],volumes:[]},
+  search:'', inputCb:null, delCb:null, delForceCb:null, delMode:'type', delName:'' };
+
+// ---------- 主题 ----------
+let themeSwitchFrame = 0;
+function applyTheme(t){
+  document.documentElement.classList.add('theme-switching');
+  document.documentElement.dataset.theme = t;
+  $('theme-btn').textContent = t === 'dark' ? '☀' : '☾';
+  try{ localStorage.setItem('dp-theme', t); }catch(_){}
+  cancelAnimationFrame(themeSwitchFrame);
+  themeSwitchFrame = requestAnimationFrame(() => {
+    themeSwitchFrame = requestAnimationFrame(() => {
+      document.documentElement.classList.remove('theme-switching');
+    });
+  });
+}
+function toggleTheme(){
+  applyTheme(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark');
+}
+(function initTheme(){
+  let t = 'dark';
+  try{ t = localStorage.getItem('dp-theme') || 'dark'; }catch(_){}
+  applyTheme(t);
+})();
+
+// ---------- 字号 ----------
+const FONT_STEPS = [0.85, 1, 1.15, 1.3, 1.5];   // 小 / 默认 / 中大 / 大 / 特大
+const FONT_LABELS = ['小', '默认', '中大', '大', '特大'];
+const REFRESH_INTERVALS = [0, 5000, 10000, 30000, 60000];
+const DEFAULT_REFRESH_INTERVAL = 5000;
+
+function currentRefreshInterval(){
+  let v = DEFAULT_REFRESH_INTERVAL;
+  try{
+    const saved = localStorage.getItem('dp-refresh-interval');
+    if(saved !== null) v = Number(saved);
+  }catch(_){}
+  return REFRESH_INTERVALS.includes(v) ? v : DEFAULT_REFRESH_INTERVAL;
+}
+function setRefreshInterval(value){
+  const interval = Number(value);
+  if(!REFRESH_INTERVALS.includes(interval)) return;
+  try{ localStorage.setItem('dp-refresh-interval', String(interval)); }catch(_){}
+  scheduleContainerPoll();
+  toast(interval ? '容器状态同步间隔已更新' : '已关闭自动同步');
+}
+function openSettings(){
+  document.querySelectorAll('.tabs button').forEach(button => button.classList.remove('active'));
+  state.tab = 'settings';
+  updateActionBtn();
+  render();
+}
+
+function currentFontScale(){
+  let v = 1;
+  try{ v = parseFloat(localStorage.getItem('dp-font-scale')) || 1; }catch(_){}
+  if(!FONT_STEPS.includes(v)) v = 1;
+  return v;
+}
+function applyFontScale(scale){
+  const v = String(scale ?? 1);
+  document.documentElement.style.setProperty('--fs', v);
+  try{ localStorage.setItem('dp-font-scale', v); }catch(_){}
+  if(state.tab === 'settings') render();
+}
+(function initFontScale(){
+  document.documentElement.style.setProperty('--fs', String(currentFontScale()));
+})();
+
+function toast(msg, err){
+  const t = $('toast');
+  t.textContent = msg;
+  t.className = 'toast show' + (err ? ' err' : '');
+  clearTimeout(t._t);
+  t._t = setTimeout(() => t.className = 'toast', 2200);
+}
+
+async function api(path, method='GET', body){
+  const opts = {method, cache:'no-store'};
+  if(body !== undefined){
+    opts.headers = {'Content-Type':'application/json'};
+    opts.body = typeof body === 'string' ? body : JSON.stringify(body);
+  }
+  const res = await fetch('/api' + path, opts);
+  if(!res.ok && res.status !== 304){
+    let msg = res.statusText;
+    try{
+      const t = await res.text();
+      if(t){
+        try{ msg = JSON.parse(t).message || t.slice(0,200); }
+        catch(_){ msg = t.slice(0,200); }
+      }
+    }catch(_){}
+    throw new Error(msg);
+  }
+  return res;
+}
+function imageApiPath(id){
+  return '/images/' + encodeURIComponent(id).replace(/%3A/gi, ':');
+}
+async function deleteImageAndVerify(id, force){
+  await api(imageApiPath(id) + '?force=' + String(force), 'DELETE');
+  let images = [];
+  for(let attempt = 0; attempt < 3; attempt++){
+    if(attempt) await new Promise(resolve => setTimeout(resolve, 180));
+    const r = await api('/images/json?all=true');
+    images = await r.json();
+    if(!images.some(image => image.Id === id)) break;
+  }
+  state.data.images = images;
+  if(state.tab === 'images') renderImages();
+  if(images.some(image => image.Id === id)){
+    throw new Error(force
+      ? '强制删除请求已完成，但 Docker 仍返回该镜像；它可能仍被其他镜像依赖。'
+      : '删除请求已完成，但 Docker 列表仍返回该镜像。');
+  }
+}
+
+function fmtSize(b){
+  if(b == null) return '—';
+  if(b < 1024) return b + ' B';
+  if(b < 1048576) return (b/1024).toFixed(1) + ' KB';
+  if(b < 1073741824) return (b/1048576).toFixed(1) + ' MB';
+  return (b/1073741824).toFixed(2) + ' GB';
+}
+function fmtTime(ts){
+  if(!ts) return '—';
+  const ms = typeof ts === 'number' ? (ts < 1e12 ? ts*1000 : ts) : Date.parse(ts);
+  if(isNaN(ms)) return '—';
+  const diff = Math.floor((Date.now() - ms)/1000);
+  if(diff < 60) return diff + ' 秒前';
+  if(diff < 3600) return Math.floor(diff/60) + ' 分钟前';
+  if(diff < 86400) return Math.floor(diff/3600) + ' 小时前';
+  if(diff < 2592000) return Math.floor(diff/86400) + ' 天前';
+  return new Date(ms).toLocaleDateString();
+}
+function localizeContainerStatus(status, state){
+  const raw = String(status || state || '').trim();
+  const time = value => value
+    .replace(/\bless than a second\b/gi, '不足 1 秒')
+    .replace(/\b(\d+)\s+(seconds?|minutes?|hours?|days?|weeks?|months?|years?)\b/gi, (_, n, unit) => {
+      const units = {second:'秒',minute:'分钟',hour:'小时',day:'天',week:'周',month:'个月',year:'年'};
+      return n + ' ' + units[unit.toLowerCase().replace(/s$/, '')];
+    })
+    .replace(/\s+ago\b/i, '前')
+    .trim();
+  const healthLabel = value => ({
+    healthy:'健康', unhealthy:'不健康', 'health: starting':'健康检查中',
+  }[value.toLowerCase()] || value);
+
+  let match = raw.match(/^Up(?:\s+(.+?))?(?:\s+\((healthy|unhealthy|health: starting)\))?$/i);
+  if(match){
+    const duration = match[1] ? time(match[1]) : '';
+    const health = match[2] || (match[1] && match[1].match(/\((healthy|unhealthy|health: starting)\)/i)?.[1]);
+    const cleanDuration = duration.replace(/\s*\((healthy|unhealthy|health: starting)\)/i, '');
+    return '运行中' + (cleanDuration ? ' · 已运行 ' + cleanDuration : '') + (health ? ' · ' + healthLabel(health) : '');
+  }
+  match = raw.match(/^Exited\s+\((-?\d+)\)(?:\s+(.+))?$/i);
+  if(match) return '已退出 · 退出码 ' + match[1] + (match[2] ? ' · ' + time(match[2]) : '');
+  match = raw.match(/^Restarting(?:\s+\((\d+)\))?(?:\s+(.+))?$/i);
+  if(match) return '重启中' + (match[1] ? ' · 第 ' + match[1] + ' 次' : '') + (match[2] ? ' · ' + time(match[2]) : '');
+
+  const labels = {
+    running:'运行中', created:'已创建', exited:'已退出', restarting:'重启中',
+    paused:'已暂停', dead:'异常停止', removing:'正在删除',
+    'removal in progress':'正在删除',
+  };
+  return labels[raw.toLowerCase()] || raw || '未知状态';
+}
+
+document.querySelectorAll('.tabs button').forEach(b => {
+  b.onclick = () => {
+    document.querySelectorAll('.tabs button').forEach(x => x.classList.remove('active'));
+    b.classList.add('active');
+    state.tab = b.dataset.tab;
+    updateActionBtn();
+    load();
+  };
+});
+$('search-input').addEventListener('input', e => {
+  state.search = e.target.value;
+  $('search-clear').classList.toggle('show', Boolean(state.search));
+  render();
+});
+$('search-clear').addEventListener('click', () => {
+  $('search-input').value = '';
+  state.search = '';
+  $('search-clear').classList.remove('show');
+  render();
+  $('search-input').focus();
+});
+
+function updateActionBtn(){
+  const b = $('action-btn');
+  const search = $('search-wrap');
+  search.hidden = state.tab === 'settings';
+  const placeholder = {containers:'搜索容器名称、镜像、服务、项目、端口或 ID…',
+    images:'搜索镜像名称或 ID…',volumes:'搜索数据卷名称、驱动或挂载路径…'}[state.tab] || '搜索…';
+  $('search-input').placeholder = placeholder;
+  if(state.tab === 'images'){ b.textContent = '拉取镜像'; b.style.display = ''; }
+  else if(state.tab === 'volumes'){ b.textContent = '新建卷'; b.style.display = ''; }
+  else { b.style.display = 'none'; }
+}
+
+async function load(){
+  try{
+    if(state.tab === 'containers'){
+      const r = await api('/containers/json?all=true');
+      state.data.containers = await r.json();
+    } else if(state.tab === 'images'){
+      const r = await api('/images/json');
+      state.data.images = await r.json();
+    } else if(state.tab === 'volumes'){
+      // 同时取容器列表，用于展示每个卷被哪些容器使用
+      const [rv, rc] = await Promise.all([
+        api('/volumes'),
+        api('/containers/json?all=true'),
+      ]);
+      const j = await rv.json();
+      state.data.volumes = j.Volumes || [];
+      state.data.containers = await rc.json();
+    }
+    render();
+  }catch(e){
+    $('view').innerHTML = '<div class="empty">加载失败<p>' + esc(e.message) + '</p></div>';
+  }
+}
+
+let containerPollInFlight = false;
+let containerPollTimer = 0;
+async function pollContainers(){
+  if(document.hidden || state.tab !== 'containers' || containerPollInFlight) return;
+  containerPollInFlight = true;
+  try{
+    const r = await api('/containers/json?all=true');
+    const containers = await r.json();
+    if(document.hidden || state.tab !== 'containers') return;
+    state.data.containers = containers;
+    if(state.search.trim()) renderContainers();
+    else syncContainerCards(containers);
+  }catch(_){
+    // 后台同步失败不覆盖当前界面；手动刷新仍会显示错误。
+  }finally{
+    containerPollInFlight = false;
+  }
+}
+function scheduleContainerPoll(){
+  clearInterval(containerPollTimer);
+  const interval = currentRefreshInterval();
+  containerPollTimer = interval ? setInterval(pollContainers, interval) : 0;
+}
+
+function render(){
+  $('view').classList.toggle('settings-page', state.tab === 'settings');
+  if(state.tab === 'containers') renderContainers();
+  else if(state.tab === 'images') renderImages();
+  else if(state.tab === 'volumes') renderVolumes();
+  else renderSettings();
+}
+
+function renderContainers(){
+  const list = state.data.containers, v = $('view');
+  const query = state.search.trim().toLocaleLowerCase();
+  const matches = c => !query || containerSearchText(c).includes(query);
+  if(!list.length){ $('count').textContent='0 个容器'; v.innerHTML = '<div class="empty">还没有容器</div>'; return; }
+
+  const projects = new Map(), standalone = [];
+  for(const c of list){
+    const compose = composeInfo(c);
+    if(!compose.isCompose){ standalone.push(c); continue; }
+    if(!projects.has(compose.project)) projects.set(compose.project, []);
+    projects.get(compose.project).push(c);
+  }
+  const visibleProjects = [...projects].map(([project, containers]) => {
+    const visible = query && project.toLocaleLowerCase().includes(query) ? containers : containers.filter(matches);
+    return [project, visible];
+  }).filter(([,containers]) => containers.length);
+  const visibleStandalone = standalone.filter(matches);
+  const visibleCount = visibleStandalone.length + visibleProjects.reduce((total,[,items])=>total+items.length,0);
+  $('count').textContent = query ? visibleCount + ' / ' + list.length + ' 个容器' : list.length + ' 个容器';
+  if(!visibleCount){ v.innerHTML = '<div class="empty">没有匹配的容器<p>试试其他关键词</p></div>'; return; }
+  const projectSections = visibleProjects.map(([project, containers]) =>
+    '<section class="container-group" data-compose-project="'+esc(project)+'" aria-label="Compose 项目 '+esc(project)+'">'
+    + '<div class="card compose-parent-card">'
+    + '<div class="card-head">'
+    + '<span class="dot compose-project-dot '+(containers.some(c=>c.State==='running')?'on':'off')+'"></span>'
+    + '<span class="name compose-title" title="Compose 项目 · '+esc(project)+'">Compose 项目 · '+esc(project)+'</span>'
+    + '<span class="group-count compose-group-count">'+containers.length+' 个容器</span>'
+    + '<span class="status group-summary">'+composeGroupSummary(containers)+'</span>'
+    + '<button class="compose-toggle" data-compose-toggle aria-expanded="false" aria-label="展开 Compose 项目 '+esc(project)+' 的容器">'
+    + '<span class="compose-chevron" aria-hidden="true">⌄</span><span class="compose-toggle-label">展开</span></button></div>'
+    + '<div class="meta"><span class="label">镜像</span><span class="value mono">—</span></div>'
+    + '<div class="meta"><span class="label">端口</span><span class="value mono port-list compose-group-ports">'+renderContainerPorts({Ports:containers.flatMap(c=>c.Ports||[])})+'</span></div>'
+    + '<div class="meta"><span class="label">容器 ID</span><span class="value mono">—</span></div>'
+    + '<div class="actions compose-parent-actions">'+composeGroupActions(containers)+'</div></div>'
+    + '<div class="container-group-cards" hidden>'+containers.map(containerCard).join('')+'</div></section>'
+  ).join('');
+  v.innerHTML = projectSections + visibleStandalone.map(containerCard).join('');
+}
+
+function containerSearchText(c){
+  const compose = composeInfo(c);
+  return [c.Names?.join(' '),c.Id,c.Image,c.Status,c.State,compose.project,compose.service,
+    ...(c.Ports||[]).flatMap(p=>[p.PublicPort,p.PrivatePort,p.Type])].join(' ').toLocaleLowerCase();
+}
+
+function composeInfo(c){
+  const labels = c.Labels || {};
+  const project = labels['com.docker.compose.project'] || '';
+  const service = labels['com.docker.compose.service'] || '';
+  const isCompose = Boolean(project || service || labels['com.docker.compose.version']);
+  return { isCompose, project: project || '未命名项目', service: service || '未知服务' };
+}
+
+function composeGroupActions(containers, busy=false){
+  const running = containers.some(c => c.State === 'running');
+  const paused = containers.some(c => c.State === 'paused');
+  const stopped = containers.some(c => !['running','paused','restarting','removing'].includes(c.State));
+  return '<button data-group-action="start" '+(!stopped || busy ? 'disabled' : '')+'>启动</button>'
+    + '<button data-group-action="pause" '+(!running || busy ? 'disabled' : '')+'>暂停</button>'
+    + '<button data-group-action="resume" '+(!paused || busy ? 'disabled' : '')+'>恢复</button>'
+    + '<button data-group-action="restart" '+(busy ? 'disabled' : '')+'>重启</button>'
+    + '<button data-group-logs '+(busy ? 'disabled' : '')+'>日志</button>';
+}
+
+function composeGroupSummary(containers){
+  const running = containers.filter(c => c.State === 'running').length;
+  const paused = containers.filter(c => c.State === 'paused').length;
+  const stopped = containers.length - running - paused;
+  if(running === containers.length) return '全部运行中';
+  if(paused === containers.length) return '全部已暂停';
+  if(!running && !paused) return '全部已停止';
+  return [running && running+' 个运行', paused && paused+' 个暂停', stopped && stopped+' 个停止'].filter(Boolean).join(' · ');
+}
+
+function containerPortMappings(c){
+  const ports = (c.Ports || []).filter(p => p.PublicPort);
+  const protocols = new Map();
+  for(const p of ports){
+    const key = p.PublicPort + ':' + p.PrivatePort;
+    if(!protocols.has(key)) protocols.set(key, new Set());
+    protocols.get(key).add(p.Type || 'tcp');
+  }
+  const seen = new Set(), mappings = new Map();
+  for(const p of ports){
+    const publicPort = Number(p.PublicPort), privatePort = Number(p.PrivatePort);
+    if(!Number.isInteger(publicPort) || publicPort < 1 || publicPort > 65535
+      || !Number.isInteger(privatePort) || privatePort < 1 || privatePort > 65535) continue;
+    const mapping = publicPort + ':' + privatePort;
+    const protocol = p.Type || 'tcp';
+    const key = mapping + '/' + protocol;
+    if(seen.has(key)) continue;
+    seen.add(key);
+    let host = p.IP && !['0.0.0.0','::','::/0'].includes(p.IP) ? p.IP : window.location.hostname || 'localhost';
+    if(host.includes(':') && !host.startsWith('[')) host = '[' + host + ']';
+    mappings.set(key, {
+      label: mapping + (protocols.get(mapping).size > 1 ? '/' + protocol : ''),
+      href: protocol === 'tcp' ? 'http://' + host + ':' + publicPort : '',
+    });
+  }
+  return [...mappings.values()];
+}
+
+function renderContainerPorts(c){
+  const mappings = containerPortMappings(c);
+  if(!mappings.length) return '—';
+  return mappings.map((port, index) =>
+    (index ? '<span class="port-separator">,</span>' : '')
+    + (port.href
+      ? '<a class="port-link" href="'+esc(port.href)+'" target="_blank" rel="noopener noreferrer" title="在新标签页打开 '+esc(port.href)+'">'+esc(port.label)+'</a>'
+      : '<span>'+esc(port.label)+'</span>')
+  ).join('');
+}
+
+function containerCard(c){
+  const name = (c.Names && c.Names[0] ? c.Names[0] : c.Id.slice(0,12)).replace(/^\//,'');
+  const shortId = (c.Id || '').replace(/^sha256:/,'').slice(0,12) || '—';
+  const running = c.State === 'running';
+  const paused = c.State === 'paused';
+  const ports = renderContainerPorts(c);
+  const img = c.Image.length > 34 ? c.Image.slice(0,34)+'…' : c.Image;
+  const compose = composeInfo(c);
+  return '<div class="card" data-id="'+c.Id+'" data-name="'+esc(name)+'" data-compose-project="'+esc(compose.isCompose?compose.project:'')+'" data-compose-service="'+esc(compose.isCompose?compose.service:'')+'">'
+    + '<div class="card-head">'
+    +   '<span class="dot '+(running||paused?'on':'off')+'"></span>'
+    +   '<span class="name" title="'+esc(name)+'">'+esc(name)+'</span>'
+    +   '<span class="status">'+esc(localizeContainerStatus(c.Status,c.State))+'</span>'
+    + '</div>'
+    + (compose.isCompose ? '<div class="meta compose-meta"><span class="label">服务</span><span class="value">'+esc(compose.service)+'</span></div>' : '')
+    + '<div class="meta image-meta"><span class="label">镜像</span><span class="value mono" title="'+esc(c.Image)+'">'+esc(img)+'</span></div>'
+    + '<div class="meta ports-meta"><span class="label">端口</span><span class="value mono port-list">'+ports+'</span></div>'
+    + '<div class="meta container-id-meta"><span class="label">容器 ID</span><span class="value mono" title="'+esc(c.Id||'')+'">'+esc(shortId)+'</span></div>'
+    + '<div class="actions">'+containerActions(running, paused)+'</div></div>';
+}
+
+function containerActions(running, paused=false){
+  return (paused
+      ? '<button data-act="resume">恢复</button><button data-act="restart">重启</button>'
+      : running
+      ? '<button data-act="stop">停止</button><button data-act="restart">重启</button>'
+      : '<button data-act="start">启动</button>')
+    + '<button data-act="logs">日志</button>'
+    + '<button data-act="rm" class="danger">删除</button>';
+}
+
+function syncContainerCards(list){
+  const view = $('view');
+  const cards = new Map([...view.querySelectorAll('.card[data-id]')].map(card => [card.dataset.id, card]));
+  const structureChanged = list.length !== cards.size || list.some(c => {
+    const card = cards.get(c.Id);
+    if(!card) return true;
+    const compose = composeInfo(c);
+    return card.dataset.composeProject !== (compose.isCompose ? compose.project : '')
+      || card.dataset.composeService !== (compose.isCompose ? compose.service : '');
+  });
+  $('count').textContent = list.length + ' 个容器';
+  if(structureChanged){ renderContainers(); return; }
+
+  for(const c of list){
+    const card = cards.get(c.Id);
+    const name = (c.Names && c.Names[0] ? c.Names[0] : c.Id.slice(0,12)).replace(/^\//,'');
+    const shortId = (c.Id || '').replace(/^sha256:/,'').slice(0,12) || '—';
+    const running = c.State === 'running';
+    const paused = c.State === 'paused';
+    const ports = renderContainerPorts(c);
+    const img = c.Image.length > 34 ? c.Image.slice(0,34)+'…' : c.Image;
+    const compose = composeInfo(c);
+    card.dataset.name = name;
+    const nameEl = card.querySelector('.name');
+    if(nameEl.textContent !== name){ nameEl.textContent = name; nameEl.title = name; }
+    const dot = card.querySelector('.dot');
+    dot.classList.toggle('on', running || paused);
+    dot.classList.toggle('off', !running && !paused);
+    card.querySelector('.status').textContent = localizeContainerStatus(c.Status, c.State);
+    const imageEl = card.querySelector('.image-meta .value');
+    if(imageEl){ imageEl.textContent = img; imageEl.title = c.Image; }
+    const portsEl = card.querySelector('.ports-meta .value');
+    if(portsEl) portsEl.innerHTML = ports;
+    const idEl = card.querySelector('.container-id-meta .value');
+    if(idEl){ idEl.textContent = shortId; idEl.title = c.Id || ''; }
+    const serviceEl = card.querySelector('.compose-meta .value');
+    if(serviceEl) serviceEl.textContent = compose.service;
+    const actions = card.querySelector('.actions');
+    const actionsNeedUpdate = paused ? !actions.querySelector('[data-act="resume"]')
+      : running ? !actions.querySelector('[data-act="stop"]')
+      : !actions.querySelector('[data-act="start"]');
+    if(actionsNeedUpdate) actions.innerHTML = containerActions(running, paused);
+  }
+  for(const group of view.querySelectorAll('.container-group[data-compose-project]')){
+    const containers = list.filter(c => composeInfo(c).project === group.dataset.composeProject);
+    const actions = group.querySelector('.compose-parent-actions');
+    if(actions) actions.innerHTML = composeGroupActions(containers, group.dataset.busy === 'true');
+    const count = group.querySelector('.compose-group-count');
+    if(count) count.textContent = containers.length + ' 个容器';
+    const summary = group.querySelector('.group-summary');
+    if(summary) summary.textContent = composeGroupSummary(containers);
+    const dot = group.querySelector('.compose-project-dot');
+    if(dot){ dot.classList.toggle('on', containers.some(c => c.State === 'running')); dot.classList.toggle('off', !containers.some(c => c.State === 'running')); }
+    const ports = group.querySelector('.compose-group-ports');
+    if(ports) ports.innerHTML = renderContainerPorts({Ports:containers.flatMap(c=>c.Ports||[])});
+  }
+}
+
+async function runComposeGroupAction(group, action){
+  const project = group.dataset.composeProject;
+  const containers = state.data.containers.filter(c => {
+    const compose = composeInfo(c);
+    return compose.isCompose && compose.project === project;
+  });
+  const matches = action === 'start' ? containers.filter(c => !['running','paused','restarting','removing'].includes(c.State))
+    : action === 'pause' ? containers.filter(c => c.State === 'running')
+    : action === 'resume' ? containers.filter(c => c.State === 'paused')
+    : containers;
+  if(!matches.length){ toast('没有需要执行此操作的容器', true); return; }
+
+  group.dataset.busy = 'true';
+  const actions = group.querySelector('.compose-parent-actions');
+  if(actions) actions.innerHTML = composeGroupActions(containers, true);
+  const endpoint = {start:'start', pause:'pause', resume:'unpause', restart:'restart'}[action];
+  const results = await Promise.allSettled(matches.map(c => api('/containers/' + c.Id + '/' + endpoint, 'POST')));
+  const failed = results.filter(result => result.status === 'rejected');
+  group.dataset.busy = 'false';
+  await load();
+  if(failed.length){
+    const firstError = failed[0].reason?.message || '操作失败';
+    toast('已完成 ' + (results.length - failed.length) + ' 个，失败 ' + failed.length + ' 个：' + firstError.slice(0,45), true);
+  }else{
+    const labels = {start:'启动', pause:'暂停', resume:'恢复', restart:'重启'};
+    toast('Compose 项目已' + labels[action] + '（' + results.length + ' 个容器）');
+  }
+}
+
+function renderImages(){
+  const all = state.data.images, v = $('view'), query = state.search.trim().toLocaleLowerCase();
+  const list = all.filter(img => !query || [img.RepoTags?.join(' '),img.Id].join(' ').toLocaleLowerCase().includes(query));
+  $('count').textContent = query ? list.length + ' / ' + all.length + ' 个镜像' : all.length + ' 个镜像';
+  if(!all.length){ v.innerHTML = '<div class="empty">还没有镜像<p>点右上角拉取一个</p></div>'; return; }
+  if(!list.length){ v.innerHTML = '<div class="empty">没有匹配的镜像<p>试试其他关键词</p></div>'; return; }
+
+  list.sort((a,b) => {
+    const na = (a.RepoTags && a.RepoTags[0]) || 'zzz';
+    const nb = (b.RepoTags && b.RepoTags[0]) || 'zzz';
+    return na.localeCompare(nb);
+  });
+
+  v.innerHTML = list.map(img => {
+    const tag = (img.RepoTags && img.RepoTags[0]) || '<none>:<none>';
+    const isDangling = !img.RepoTags || !img.RepoTags.length;
+    const shortId = img.Id.replace(/^sha256:/, '').slice(0, 12);
+    const tagCount = (img.RepoTags||[]).length;
+    const more = tagCount > 1 ? ' +' + (tagCount-1) : '';
+    const displayName = isDangling ? shortId : tag;
+    return '<div class="card" data-id="'+esc(img.Id)+'" data-tag="'+esc(tag)+'" data-name="'+esc(displayName)+'">'
+      + '<div class="card-head">'
+      +   '<span class="dot '+(isDangling?'off':'on')+'"></span>'
+      +   '<span class="name" title="'+esc(tag)+'">'+esc(tag)+more+'</span>'
+      + '</div>'
+      + '<div class="meta"><span class="label">大小</span><span class="value mono">'+fmtSize(img.Size)+'</span></div>'
+      + '<div class="meta"><span class="label">创建</span><span class="value">'+fmtTime(img.Created)+'</span></div>'
+      + '<div class="meta"><span class="label">ID</span><span class="value mono">'+shortId+'</span></div>'
+      + '<div class="actions">'
+      +   '<button data-act="run-image"'+(isDangling?' disabled':'')+'>运行</button>'
+      +   '<button data-act="rm-image" class="danger">删除</button>'
+      + '</div></div>';
+  }).join('');
+}
+
+/** 从容器 Mounts 里找出挂载了指定卷的所有容器名（含已停止的） */
+function volumeUsers(volName){
+  return (state.data.containers || [])
+    .filter(c => (c.Mounts || []).some(m => m.Type === 'volume' && m.Name === volName))
+    .map(c => {
+      const n = (c.Names && c.Names[0]) || c.Id.slice(0,12);
+      const name = n.replace(/^\//,'');
+      // 挂载路径也一并给出，同名卷被挂到不同路径时便于区分
+      const dest = (c.Mounts || []).find(m => m.Type === 'volume' && m.Name === volName)?.Destination || '';
+      return { name, dest, running: c.State === 'running' };
+    });
+}
+
+function renderVolumes(){
+  const all = state.data.volumes, v = $('view'), query = state.search.trim().toLocaleLowerCase();
+  const list = all.filter(vol => !query || [vol.Name,vol.Driver,vol.Mountpoint,JSON.stringify(vol.Options||{}),
+    ...volumeUsers(vol.Name).flatMap(user=>[user.name,user.dest])].join(' ').toLocaleLowerCase().includes(query));
+  $('count').textContent = query ? list.length + ' / ' + all.length + ' 个卷' : all.length + ' 个卷';
+  if(!all.length){ v.innerHTML = '<div class="empty">还没有数据卷</div>'; return; }
+  if(!list.length){ v.innerHTML = '<div class="empty">没有匹配的数据卷<p>试试其他关键词</p></div>'; return; }
+
+  v.innerHTML = list.map(vol => {
+    const inUse = vol.UsageData && vol.UsageData.RefCount > 0;
+    const mp = vol.Mountpoint || (vol.Options && vol.Options.device) || '—';
+    const shortMp = mp.length > 40 ? '…' + mp.slice(-38) : mp;
+    const users = volumeUsers(vol.Name);
+    // UsageData 在不支持的驱动下可能缺失，以实际挂载关系为准
+    const used = users.length > 0 || inUse;
+    const usersHtml = used
+      ? (users.length
+          ? users.map(u =>
+              '<span class="user-tag'+(u.running?'':' stopped')+'" title="'+esc(u.name)+(u.dest?' → '+esc(u.dest):'')+'">'
+              + '<span class="user-dot"></span>'+esc(u.name)
+              + (u.dest ? '<span class="user-dest">'+esc(u.dest)+'</span>' : '')
+              + '</span>').join('')
+          : '<span class="hint-inline">已被引用，但未在容器挂载列表中（可能由 Docker Compose / 已删除容器占用）</span>')
+      : '<span class="hint-inline">未被任何容器使用</span>';
+    return '<div class="card" data-name="'+esc(vol.Name)+'">'
+      + '<div class="card-head">'
+      +   '<span class="dot '+(used?'on':'off')+'"></span>'
+      +   '<span class="name" title="'+esc(vol.Name)+'">'+esc(vol.Name)+'</span>'
+      +   (used ? '<span class="status">使用中'+(users.length?' ×'+users.length:'')+'</span>' : '')
+      + '</div>'
+      + '<div class="meta"><span class="label">驱动</span><span class="value mono">'+esc(vol.Driver)+'</span></div>'
+      + '<div class="meta"><span class="label">挂载点</span><span class="value mono" title="'+esc(mp)+'">'+esc(shortMp)+'</span></div>'
+      + '<div class="meta"><span class="label">创建</span><span class="value">'+fmtTime(vol.CreatedAt)+'</span></div>'
+      + '<div class="meta users"><span class="label">使用者</span><span class="value users-wrap">'+usersHtml+'</span></div>'
+      + '<div class="actions">'
+      +   '<button data-act="rm-volume" class="danger" '+(used?'disabled title="正在被容器使用"':'')+'>删除</button>'
+      + '</div></div>';
+  }).join('');
+}
+
+// ---------- 设置页 ----------
+function renderSettings(){
+  const v = $('view');
+  $('count').textContent = '';
+  const cur = currentFontScale();
+  const refreshInterval = currentRefreshInterval();
+  const btns = FONT_STEPS.map((s,i) =>
+    '<button class="fs-btn'+(s === cur ? ' active' : '')+'" data-fs="'+s+'" title="'+FONT_LABELS[i]+'">'
+    + FONT_LABELS[i] + '</button>').join('');
+  const pct = Math.round(cur * 100);
+  v.innerHTML =
+    '<div class="settings">'
+    + '<div class="settings-intro"><div class="eyebrow">DOCKER PANEL · PREFERENCES</div>'
+    + '<h2>设置</h2><p>调整面板外观和容器状态同步方式。</p></div>'
+    + '<div class="settings-card">'
+    +   '<h3>容器状态同步</h3>'
+    +   '<div class="desc">自动检查容器状态变化。默认每 5 秒同步一次，仅更新发生变化的卡片。</div>'
+    +   '<div class="setting-row"><label for="refresh-interval">同步间隔</label>'
+    +   '<select id="refresh-interval" class="setting-select" onchange="setRefreshInterval(this.value)">'
+    +     '<option value="0"'+(refreshInterval===0?' selected':'')+'>关闭自动同步</option>'
+    +     '<option value="5000"'+(refreshInterval===5000?' selected':'')+'>每 5 秒</option>'
+    +     '<option value="10000"'+(refreshInterval===10000?' selected':'')+'>每 10 秒</option>'
+    +     '<option value="30000"'+(refreshInterval===30000?' selected':'')+'>每 30 秒</option>'
+    +     '<option value="60000"'+(refreshInterval===60000?' selected':'')+'>每 1 分钟</option>'
+    +   '</select></div>'
+    + '</div>'
+    + '<div class="settings-card">'
+    +   '<h3>字体大小</h3>'
+    +   '<div class="desc">调整整个界面的文字大小，设置会自动保存在本机浏览器中。</div>'
+    +   '<div class="setting-row"><div class="fs-picker">'+btns+'</div>'
+    +   '<span class="scale">'+pct+'%</span></div>'
+    + '</div>'
+    + '<div class="settings-card">'
+    +   '<h3>关于</h3>'
+    +   '<div class="desc">轻量管理 Docker 容器、镜像和数据卷。</div>'
+    + '</div>'
+    + '</div>';
+}
+
+$('view').addEventListener('click', e => {
+  const fsBtn = e.target.closest('.fs-btn');
+  if(fsBtn){ applyFontScale(parseFloat(fsBtn.dataset.fs)); return; }
+});
+
+$('view').addEventListener('click', async e => {
+  const btn = e.target.closest('button[data-act]');
+  const groupBtn = e.target.closest('button[data-group-action]');
+  const groupLogsBtn = e.target.closest('button[data-group-logs]');
+  const toggle = e.target.closest('button[data-compose-toggle]');
+  if(toggle && state.tab === 'containers'){
+    const group = toggle.closest('.container-group');
+    const cards = group?.querySelector('.container-group-cards');
+    if(cards){
+      const expanded = toggle.getAttribute('aria-expanded') !== 'true';
+      toggle.setAttribute('aria-expanded', String(expanded));
+      toggle.setAttribute('aria-label', (expanded ? '收起' : '展开') + ' Compose 项目 ' + group.dataset.composeProject);
+      const label = toggle.querySelector('.compose-toggle-label');
+      if(label) label.textContent = expanded ? '收起' : '展开';
+      cards.hidden = !expanded;
+    }
+    return;
+  }
+  if(groupLogsBtn && !groupLogsBtn.disabled && state.tab === 'containers'){
+    const group = groupLogsBtn.closest('.container-group[data-compose-project]');
+    if(group) showComposeLogs(group.dataset.composeProject);
+    return;
+  }
+  if(groupBtn && !groupBtn.disabled && state.tab === 'containers'){
+    const group = groupBtn.closest('.container-group[data-compose-project]');
+    if(group) await runComposeGroupAction(group, groupBtn.dataset.groupAction);
+    return;
+  }
+  if(!btn || btn.disabled) return;
+  const card = btn.closest('.card');
+  const act = btn.dataset.act;
+
+  if(state.tab === 'containers'){
+    const id = card.dataset.id;
+    const name = card.dataset.name;
+    if(act === 'logs'){ showLogs(id, name); return; }
+    if(act === 'rm'){
+      openDel('删除容器', name, '容器',
+        async () => api('/containers/' + id + '?force=true', 'DELETE'));
+      return;
+    }
+    btn.disabled = true;
+    try{
+      if(act === 'start')        await api('/containers/' + id + '/start', 'POST');
+      else if(act === 'resume')  await api('/containers/' + id + '/unpause', 'POST');
+      else if(act === 'stop')    await api('/containers/' + id + '/stop', 'POST');
+      else if(act === 'restart') await api('/containers/' + id + '/restart', 'POST');
+      toast('操作成功'); await load();
+    }catch(err){ toast('失败: ' + err.message.slice(0,60), true); btn.disabled = false; }
+  }
+  else if(state.tab === 'images'){
+    const tag = card.dataset.tag;
+    const displayName = card.dataset.name;
+    if(act === 'run-image'){
+      openInput('运行镜像', '容器名', tag.split('/').pop().split(':')[0], async (name) => {
+        if(!name) return;
+        try{
+          await api('/containers/create?name=' + encodeURIComponent(name), 'POST',
+            {Image: tag});
+          await api('/containers/' + encodeURIComponent(name) + '/start', 'POST');
+          toast('已启动 ' + name);
+          state.tab = 'containers';
+          document.querySelectorAll('.tabs button').forEach(x =>
+            x.classList.toggle('active', x.dataset.tab === 'containers'));
+          updateActionBtn(); load();
+        }catch(err){ toast('失败: ' + err.message.slice(0,80), true); }
+      });
+    }
+    else if(act === 'rm-image'){
+      const imageId = card.dataset.id;
+      openDel('删除镜像', displayName, '镜像',
+        () => deleteImageAndVerify(imageId, false),
+        () => deleteImageAndVerify(imageId, true));
+    }
+  }
+  else if(state.tab === 'volumes'){
+    const name = card.dataset.name;
+    if(act === 'rm-volume'){
+      openDel('删除数据卷', name, '卷',
+        async () => api('/volumes/' + encodeURIComponent(name), 'DELETE'));
+    }
+  }
+});
+
+async function primaryAction(){
+  if(state.tab === 'images'){
+    openInput('拉取镜像', '镜像名（可带 tag，如 nginx:alpine）', '', async (name) => {
+      if(!name) return;
+      toast('正在拉取 ' + name + '…');
+      try{
+        const [repo, tag] = name.includes(':') ? name.split(':') : [name, 'latest'];
+        await api('/images/create?fromImage=' + encodeURIComponent(repo) +
+                  '&tag=' + encodeURIComponent(tag), 'POST');
+        toast('拉取完成'); load();
+      }catch(e){ toast('拉取失败: ' + e.message.slice(0,80), true); }
+    });
+  }
+  else if(state.tab === 'volumes'){
+    openInput('新建数据卷', '卷名称', '', async (name) => {
+      if(!name) return;
+      try{
+        await api('/volumes/create', 'POST', {Name: name});
+        toast('已创建'); load();
+      }catch(e){ toast('失败: ' + e.message.slice(0,60), true); }
+    });
+  }
+}
+
+// ---------- 日志 ----------
+function decodeDockerLogBuffer(buffer){
+  const input = new Uint8Array(buffer);
+  const frames = [];
+  let offset = 0, multiplexed = input.length >= 8;
+  while(multiplexed && offset < input.length){
+    if(offset + 8 > input.length || ![1,2,3].includes(input[offset])
+      || input[offset+1] || input[offset+2] || input[offset+3]){ multiplexed = false; break; }
+    const length = new DataView(input.buffer,input.byteOffset + offset + 4,4).getUint32(0,false);
+    if(length > input.length - offset - 8){ multiplexed = false; break; }
+    frames.push(input.subarray(offset + 8, offset + 8 + length));
+    offset += 8 + length;
+  }
+  const bytes = multiplexed ? concatLogFrames(frames) : input;
+  try{ return new TextDecoder('utf-8',{fatal:true}).decode(bytes); }
+  catch(_){
+    try{ return new TextDecoder('gbk').decode(bytes); }
+    catch(__){ return new TextDecoder('utf-8').decode(bytes); }
+  }
+}
+
+function concatLogFrames(frames){
+  const length = frames.reduce((sum,frame)=>sum+frame.length,0);
+  const bytes = new Uint8Array(length);
+  let offset = 0;
+  for(const frame of frames){ bytes.set(frame,offset); offset += frame.length; }
+  return bytes;
+}
+
+function cleanLogText(text){
+  return text
+    .replace(/\x1B\[[0-?]*[ -/]*[@-~]/g, '')
+    .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '');
+}
+
+async function fetchContainerLogs(id,tail=300){
+  const res = await fetch('/api/containers/' + encodeURIComponent(id) + '/logs?stdout=1&stderr=1&timestamps=1&tail=' + tail);
+  if(!res.ok){
+    const message = await res.text();
+    throw new Error(message || res.statusText || '读取日志失败');
+  }
+  return decodeDockerLogBuffer(await res.arrayBuffer());
+}
+
+function presentLogs(title,sub,text){
+  $('log-title').textContent = title;
+  $('log-sub').textContent = sub || '';
+  $('log-content').textContent = text || '（没有日志输出）';
+  $('log-modal').classList.add('show');
+  const pre = $('log-content');
+  pre.scrollTop = pre.scrollHeight;
+}
+
+async function showLogs(id, name){
+  presentLogs(name,'加载中…','');
+  try{
+    presentLogs(name,'',cleanLogText(await fetchContainerLogs(id)));
+  }catch(err){ presentLogs(name,'','加载失败: ' + err.message); }
+}
+
+async function showComposeLogs(project){
+  const containers = state.data.containers.filter(c => composeInfo(c).isCompose && composeInfo(c).project === project);
+  presentLogs('Compose 项目日志',project+' · '+containers.length+' 个容器','加载中…');
+  const results = await Promise.all(containers.map(async c => {
+    const name = (c.Names && c.Names[0] ? c.Names[0] : c.Id.slice(0,12)).replace(/^\//,'');
+    const service = composeInfo(c).service;
+    try{ return {name,service,text:await fetchContainerLogs(c.Id,100)}; }
+    catch(error){ return {name,service,error:error.message}; }
+  }));
+  const text = results.map(result =>
+    '['+result.service+' · '+result.name+']\n'+(result.error ? '加载失败: '+result.error : cleanLogText(result.text || '（没有日志输出）'))
+  ).join('\n\n');
+  presentLogs('Compose 项目日志',project+' · '+containers.length+' 个容器',text);
+}
+function closeLog(){ $('log-modal').classList.remove('show'); }
+
+// ---------- 输入 ----------
+function openInput(title, label, def, cb){
+  $('input-title').textContent = title;
+  $('input-label').textContent = label;
+  $('input-field').value = def || '';
+  state.inputCb = cb;
+  $('input-modal').classList.add('show');
+  setTimeout(() => $('input-field').focus(), 50);
+}
+function closeInput(){ $('input-modal').classList.remove('show'); state.inputCb = null; }
+function confirmInput(){
+  const v = $('input-field').value.trim();
+  const cb = state.inputCb;
+  closeInput();
+  if(cb) cb(v);
+}
+
+// ---------- 删除确认（需输入名称） ----------
+function openDel(title, name, kind, cb, forceCb=null){
+  state.delCb = cb;
+  state.delForceCb = forceCb;
+  state.delMode = 'type';
+  state.delName = name;
+  $('del-title').textContent = title;
+  $('del-hint').textContent = '此操作不可撤销，请确认。';
+  $('del-input-wrap').hidden = false;
+  $('del-target').textContent = name;
+  $('del-label').textContent = '请输入 ' + kind + '名称「' + name + '」以确认删除：';
+  const inp = $('del-input');
+  inp.value = '';
+  inp.placeholder = name;
+  $('del-confirm').textContent = '确认删除';
+  $('del-confirm').disabled = true;
+  $('del-modal').classList.add('show');
+  setTimeout(() => inp.focus(), 50);
+}
+function closeDel(){
+  $('del-modal').classList.remove('show');
+  state.delCb = null; state.delForceCb = null; state.delMode = 'type'; state.delName = '';
+  $('del-input-wrap').hidden = false;
+  $('del-confirm').textContent = '确认删除';
+}
+async function confirmDel(){
+  const cb = state.delCb;
+  if(!cb) return;
+  const btn = $('del-confirm');
+  btn.disabled = true;
+  try{
+    await cb();
+    toast('已删除');
+    closeDel();
+    await load();
+  }catch(err){
+    const message = String(err.message || err).slice(0,180);
+    if(state.delForceCb && state.delMode !== 'force' && /being used by|must be forced|列表仍返回该镜像/i.test(message)){
+      state.delCb = state.delForceCb;
+      state.delForceCb = null;
+      state.delMode = 'force';
+      $('del-hint').textContent = 'Docker 未移除该镜像，可能仍被容器或其他镜像引用。强制删除后会移除该镜像，仍要继续吗？';
+      $('del-input-wrap').hidden = true;
+      btn.textContent = '强制删除';
+    }else{
+      $('del-hint').textContent = (state.delMode === 'force' ? '强制删除失败：' : '删除失败：') + message;
+    }
+    btn.disabled = false;
+  }
+}
+$('del-input').addEventListener('input', e => {
+  if(state.delMode === 'force') return;
+  $('del-confirm').disabled = e.target.value.trim() !== state.delName;
+});
+$('del-input').addEventListener('keydown', e => {
+  if(e.key === 'Enter' && !$('del-confirm').disabled) confirmDel();
+});
+
+// ---------- 全局键盘 / 遮罩关闭 ----------
+$('log-modal').addEventListener('click', e => { if(e.target === $('log-modal')) closeLog(); });
+$('input-modal').addEventListener('click', e => { if(e.target === $('input-modal')) closeInput(); });
+$('del-modal').addEventListener('click', e => { if(e.target === $('del-modal')) closeDel(); });
+document.addEventListener('keydown', e => {
+  if(e.key === 'Escape'){ closeLog(); closeInput(); closeDel(); }
+  if(e.key === 'Enter' && $('input-modal').classList.contains('show')) confirmInput();
+});
+
+updateActionBtn();
+load();
+scheduleContainerPoll();
+</script>
+</body>
+</html>

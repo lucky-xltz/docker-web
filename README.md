@@ -1,0 +1,69 @@
+# docker-web
+
+极简 Docker 管理面板（容器 / 镜像 / 数据卷），原 `docker-panel.py` 的 HTML + Bun 重写版，可打包为单个 Docker 容器运行。
+
+- 前端：单个 `index.html`，零依赖、零构建
+- 后端：`Bun.serve` 静态托管 + 反向代理到 `docker.sock`
+- 镜像：`oven/bun:1-alpine`，最终约 **40 MB**
+
+## 快速开始
+
+```bash
+# 本地运行（需要 bun）
+bun run src/server.ts          # 默认 9999 端口
+bun run src/server.ts 8080     # 指定端口
+
+# Docker
+docker compose up -d --build   # 或 docker build -t docker-panel .
+docker run -d --name docker-panel -p 9999:9999 \
+  -v /var/run/docker.sock:/var/run/docker.sock docker-panel
+```
+
+打开 http://localhost:9999
+
+## API
+
+面板自身只暴露两个路径：
+
+| 路径 | 说明 |
+| --- | --- |
+| `GET /` | 返回 `index.html` |
+| `GET /healthz` | 健康检查：`{ ok, socket, uptime }`，Dockerfile `HEALTHCHECK` 使用 |
+
+其余全部请求按 Docker Engine API 原样转发，例如 `GET /api/containers/json` → `GET /containers/json`（请求体、Content-Type、查询参数透传，chunked 响应自动解码）。
+
+## Docker 部署要点
+
+镜像内以非 root 用户 `bun` 运行，访问 `docker.sock` 靠 group 权限：
+
+- `docker compose` 中已设 `user: "0:0"` 直接以 root 运行，最省事；
+- 若想以非 root 运行，把 `user` 改为 `"1000:0"` 或宿主机 `docker` 组的实际 gid（`stat -f %g /var/run/docker.sock`）；
+- 数据卷挂载 `/var/run/docker.sock` 后，容器内可管理**宿主机**的 Docker；若要管理 Docker-in-Docker，需另挂 `docker` 套接字或配合 `docker:dind` sidecar。
+- 面板默认只监听 `127.0.0.1`。容器内该地址仅在容器自身回环可用，需在 `docker run` 时用 `-p 9999:9999` 发布端口才能从外部访问。
+
+## 与原 Python 版的差异
+
+| 项 | Python 版 | Bun 版 |
+| --- | --- | --- |
+| 运行依赖 | Python 3 | Bun（Docker 内无需宿主机 Python） |
+| 启动时间 | ~100 ms | ~10 ms |
+| Unix socket 代理 | 手写 `socket` + `socketserver` | `Bun.connect({ unix })` 原生支持 |
+| 分片传输解码 | 自实现 `decode_chunked` | 同样保留（`decodeChunked`），接口行为一致 |
+| 请求体上限 | 无 | 64 MB |
+| 健康检查 | 无 | `/healthz` + Dockerfile `HEALTHCHECK` |
+| 前端 | 内嵌 HTML 字符串 | 独立 `index.html`，便于单独编辑 |
+
+前端交互包括主题切换、搜索容器 / 镜像 / 数据卷、输入名称确认删除和日志查看。Compose 项目支持分组管理和项目日志，容器页后台静默同步状态，默认每 5 秒一次；同步间隔可在设置页更改或关闭，并保存在当前浏览器。右上角按钮打开设置；镜像和数据卷在打开页面、切换分类或执行操作后更新。
+
+## 文件结构
+
+```
+docker-web/
+├── src/
+│   ├── server.ts     # Bun 后端（服务 + 反向代理）
+│   └── index.html    # 前端页面（从 docker-panel.py 原样提取）
+├── Dockerfile
+├── docker-compose.yml
+├── package.json
+└── docker-panel.py   # 原 Python 版，保留参考
+```
